@@ -24,4 +24,6 @@ func (tet *TimeEventTrigger)Add(te *TimeEvent) {
 }
 
 //Begin start wait timeevent and trigger it
-func 
+func (tet *TimeEventTrigger)Begin() {
+    te := tet.findNearest()
+}
