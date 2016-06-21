@@ -1,69 +1,98 @@
 package main
 
 import (
-	"regexp"
-	"strings"
+	"encoding/json"
+	"fmt"
 
+	"github.com/astaxie/beego"
 	. "github.com/tj/go-debug"
 )
 
 var __deRegMgr__ = Debug("timer:registerMgr")
 
 type RegisterMgr struct {
-	fixedKey2Regs     map[string][]string         //map from te.key -> register names
-	pattern2Regs      map[*regexp.Regexp][]string //pattern regexp -> register names
-	connectedClients  map[string]RegisterClient   //client.name -> client
-	delayedTimeEvents []*TimeEventPublish
+	clients           []RegisterClient //pattern clients
+	delayedTimeEvents []*DelayedTimeEvent
+	beego.Controller
 }
 
 func NewRegisterMgr() *RegisterMgr {
 	return &RegisterMgr{
-		fixedKey2Regs:    make(map[string][]string),
-		pattern2Regs:     make(map[*regexp.Regexp][]string),
-		connectedClients: make(map[string]RegisterClient),
+		clients:           make([]RegisterClient, 0),
+		delayedTimeEvents: make([]*DelayedTimeEvent, 0),
 	}
 }
 
 func (rgm *RegisterMgr) HandleTimeEvent(te *TimeEvent) error {
 	__deRegMgr__("got time event to handle:%s", te)
 	key := te.key
-	for k, v := range rgm.fixedKey2Regs {
-		if k == key {
-			rgm.Publish(te, v...)
-		}
-	}
-	for r, v := range rgm.pattern2Regs {
-		if r.MatchString(key) {
-			rgm.Publish(te, v...)
+	for _, c := range rgm.clients {
+		if c.Match(key) {
+			err := c.Deliver(te)
+			if err != nil {
+				rgm.delay(te, c)
+				continue
+			}
 		}
 	}
 	return nil
 }
 
-func (rgm *RegisterMgr) Publish(te *TimeEvent, names ...string) {
-	__deRegMgr__("publish te:%s, to names:%s clients", te, strings.Join(names, ","))
-	for _, n := range names {
-		c, ok := rgm.connectedClients[n]
-		if !ok {
-			rgm.delay(te, n)
-		}
-		err := c.deliver(te, n)
-		if err != nil {
-			rgm.delay(te, n)
-		}
-		//TODO remove client if err is fatal(ie. client closed)
-	}
-}
-
-func (rgm *RegisterMgr) delay(te *TimeEvent, name string) {
-	__deRegMgr__("clients not found for te:%s with name %s. delay")
-	rgm.delayedTimeEvents = append(rgm.delayedTimeEvents, &TimeEventPublish{
-		name: name,
-		te:   te,
+func (rgm *RegisterMgr) delay(te *TimeEvent, cli RegisterClient) {
+	__deRegMgr__("clients not found or unavaliable for te:%s with name %s. delay")
+	rgm.delayedTimeEvents = append(rgm.delayedTimeEvents, &DelayedTimeEvent{
+		client: cli,
+		te:     te,
 	})
 }
 
-type TimeEventPublish struct {
-	name string //register name
-	te   *TimeEvent
+//add http client
+//err if name exists
+func (rgm *RegisterMgr) Post() {
+	//key name url isPattern
+	var reqObj struct {
+		Name      string `json:"name"`
+		Url       string `json:"url"`
+		Key       string `json:"key"`
+		isPattern bool   `json:"isPattern"`
+	}
+	err := json.Unmarshal(rgm.Ctx.Input.RequestBody, &reqObj)
+	if err != nil {
+		rgm.Ctx.WriteString("err parse json:" + err.Error())
+		return
+	}
+	__deRegCli__("serve http for register mgr:%v", reqObj)
+	if reqObj.Key == "" {
+		rgm.Ctx.WriteString("no key")
+		return
+	}
+	if reqObj.Name == "" {
+		rgm.Ctx.WriteString("no name")
+		return
+	}
+	//TODO regexp url
+	if reqObj.Key == "" {
+		rgm.Ctx.WriteString("no url or illegal")
+		return
+	}
+	var m RegisterClientMatcher
+	if reqObj.isPattern == false {
+		m = NewFixedKeyMatcher(reqObj.Key)
+	} else {
+		var errCpl error
+		m, errCpl = NewRegexpKeyMatcher(reqObj.Key)
+		if errCpl != nil {
+			rgm.Ctx.WriteString(fmt.Sprintf("compile regexp:%s, fail, err:%s", reqObj.Key, errCpl))
+			return
+		}
+	}
+	c := NewRegisterClientHTTP(m, reqObj.Name, reqObj.Url)
+	rgm.clients = append(rgm.clients, c)
+	__deRegMgr__("add http client, key:%s, name:%s, url:%s",
+		reqObj.Key, reqObj.Name, reqObj.Url)
+}
+
+type DelayedTimeEvent struct {
+	client RegisterClient
+	te     *TimeEvent
 }

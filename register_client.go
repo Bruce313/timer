@@ -1,22 +1,54 @@
 package main
 
 import (
+	"regexp"
+
 	. "github.com/tj/go-debug"
 )
 
 var __deRegCli__ = Debug("timer:reg_client")
 
-type RegisterClient struct {
-	name string
+type RegisterClient interface {
+	RegisterClientDeliver
+	RegisterClientMatcher
 }
 
-func NewRegisterClient(name string) *RegisterClient {
-	return &RegisterClient{
-		name: name,
+type RegisterClientDeliver interface {
+	Deliver(te *TimeEvent) error
+}
+
+type RegisterClientMatcher interface {
+	Match(key string) bool
+}
+
+type FixedKeyMatcher struct {
+	key string
+}
+
+func NewFixedKeyMatcher(key string) *FixedKeyMatcher {
+	return &FixedKeyMatcher{
+		key: key,
 	}
 }
 
-func (rc *RegisterClient) deliver(te *TimeEvent, name string) error {
-	__deRegCli__("client for name:%s, try to deliver timeevent:%s", name, te)
-	return nil
+func (fnm *FixedKeyMatcher) Match(key string) bool {
+	return fnm.key == key
+}
+
+type RegexpKeyMatcher struct {
+	reg *regexp.Regexp
+}
+
+func NewRegexpKeyMatcher(regString string) (*RegexpKeyMatcher, error) {
+	r, err := regexp.Compile(regString)
+	if err != nil {
+		return nil, err
+	}
+	return &RegexpKeyMatcher{
+		reg: r,
+	}, nil
+}
+
+func (rnm *RegexpKeyMatcher) Match(key string) bool {
+	return rnm.reg.MatchString(key)
 }
