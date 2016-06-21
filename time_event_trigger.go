@@ -1,17 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
 	"time"
 
+	"github.com/astaxie/beego"
 	"github.com/tj/go-debug"
 )
 
 var (
-	deTrigger = debug.Debug("timer:trigger")
+	__deTrigger__ = debug.Debug("timer:trigger")
 )
 
 //TimeEventTrigger is a wrapper which triggers timeevent
@@ -22,6 +22,7 @@ type TimeEventTrigger struct {
 	tes     []*TimeEvent
 	timer   *time.Timer
 	nearest *TimeEvent
+	beego.Controller
 }
 
 //NewTimeEventTrigger create TimeEventTrigger
@@ -66,14 +67,14 @@ func (tet *TimeEventTrigger) refresh() {
 
 func (tet *TimeEventTrigger) triggerEvent() {
 	if tet.nearest == nil {
-		deTrigger("[WARN]: trigger event but nearest is nil")
+		__deTrigger__("[WARN]: trigger event but nearest is nil")
 		return
 	}
 	tet.chTimeEventOut <- tet.nearest
 	//del nearest te
 	for i, v := range tet.tes {
 		if v.Equals(tet.nearest) {
-			deTrigger("te trigger, remove")
+			__deTrigger__("te trigger, remove")
 			tet.tes = append(tet.tes[:i], tet.tes[i+1:]...)
 		}
 	}
@@ -131,49 +132,45 @@ var (
 )
 
 //ADD MOD DEL from http
-func (tet *TimeEventTrigger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	deTrigger("got http req, path:%s", path)
-	errParse := r.ParseForm()
-	if errParse != nil {
-		w.Write(REP_BAD_REQ)
+func (tet *TimeEventTrigger) Post() {
+	var reqObj struct {
+		key   string `json:"key"`
+		data  []byte `json:"data"`
+		delay int64  `json:"delay"`
+	}
+	err := json.Unmarshal(tet.Ctx.Input.RequestBody, &reqObj)
+	__deTrigger__("got json req obj :%v", reqObj)
+	if err != nil {
+		tet.Ctx.WriteString(fmt.Sprintf("wrong body parse json:%s", err))
 		return
 	}
-	form := r.Form
-	if path == pathAdd {
-		deTrigger("match add, data:%s", form)
-		key := form.Get(KEY_NAME)
-		if key == "" {
-			w.Write(REP_NO_KEY)
-			return
-		}
-		data := form.Get(DATA_NAME)
-		delay := form.Get(DELAY_NAME)
-		//delay is seconds
-		seconds, err := strconv.Atoi(delay)
-		if err != nil || seconds < 0 {
-			w.Write(REP_DELAY_WRONG)
-			return
-		}
-		err = tet.addTimeEvent(&TimeEvent{
-			key:   key,
-			data:  []byte(data),
-			delay: time.Second * time.Duration(seconds),
-		})
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-		w.Write(REP_OK)
+
+	if reqObj.key == "" {
+		tet.Ctx.WriteString(REP_NO_KEY)
 		return
 	}
-	w.Write(REP_ROUTER_NOT_FOUND)
+	//delay is seconds
+	if reqObj.delay < 0 {
+		tet.Ctx.WriteString(REP_DELAY_WRONG)
+		return
+	}
+	err = tet.addTimeEvent(&TimeEvent{
+		key:   reqObj.key,
+		data:  reqObj.data,
+		delay: time.Second * time.Duration(reqObj.delay),
+	})
+	if err != nil {
+		tet.Ctx.WriteString(fmt.Sprintf("err when add to time events:%s", err))
+		return
+	}
+	tet.Ctx.WriteString(REP_OK)
+	return
 }
 
 var (
-	REP_ROUTER_NOT_FOUND = []byte("404 router not found\n")
-	REP_OK               = []byte("OK\n")
-	REP_DELAY_WRONG      = []byte("param delay must be posive(in seconds)\n")
-	REP_NO_KEY           = []byte("no key\n")
-	REP_BAD_REQ          = []byte("request body or query error\n")
+	REP_ROUTER_NOT_FOUND = "404 router not found\n"
+	REP_OK               = "OK\n"
+	REP_DELAY_WRONG      = "param delay must be posive(in seconds)\n"
+	REP_NO_KEY           = "no key\n"
+	REP_BAD_REQ          = "request body or query error\n"
 )
