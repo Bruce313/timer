@@ -7,11 +7,11 @@ import (
 
 //TimeEvent contain key and data of time
 type TimeEvent struct {
-	key           string
-	data          []byte
-	delay         time.Duration
-	timeCreate    *time.Time
-	timeTriggered *time.Time
+	key           string        `json:"key"`
+	data          []byte        `json:"data"`
+	delay         time.Duration `json:"delay"`
+	timeCreate    *time.Time    `json:"timeCreate"`
+	timeTriggered *time.Time    `json:"timeTriggered"`
 }
 
 func (te *TimeEvent) String() string {
