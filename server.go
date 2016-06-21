@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
-
+	"github.com/astaxie/beego"
 	. "github.com/tj/go-debug"
 )
 
@@ -16,9 +14,11 @@ func main() {
 	go trigger.Begin()
 	debugTecm := NewDebugTECM()
 	regMgrTecm := NewRegisterMgr()
-	http.Handle(fmt.Sprintf("/%s/", pathPrefix), trigger)
 	go broadcastEvent(chTimeEventOut, debugTecm, regMgrTecm)
-	http.ListenAndServe(":6200", nil)
+	//http register client
+	beego.Router("/client", NewRegisterMgr())
+	beego.Router("/time_event", trigger)
+	beego.Run()
 }
 
 func broadcastEvent(chTE <-chan *TimeEvent, heads ...TimeEventHandler) {
