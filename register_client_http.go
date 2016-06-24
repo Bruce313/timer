@@ -30,7 +30,7 @@ func (rch *RegisterClientHTTP) Deliver(te *TimeEvent) error {
 	replaceUrl := strings.Replace(rch.url, REPLACE_KEY, te.key, -1)
 	bodyBuf := rch.buildBody(te)
 	bodyReader := bytes.NewReader(bodyBuf)
-	__deRegCli__("deliver: body:%v, url:%s", bodyBuf, replaceUrl)
+	__deRegCli__("deliver: body:%s, url:%s", []byte(bodyBuf), replaceUrl)
 	_, err := http.Post(replaceUrl, "application/json", bodyReader)
 	if err != nil {
 		__deRegCli__("post err:%s", err)

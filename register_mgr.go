@@ -3,17 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 
-	"github.com/astaxie/beego"
 	. "github.com/tj/go-debug"
 )
 
 var __deRegMgr__ = Debug("timer:registerMgr")
 
 type RegisterMgr struct {
-	clients           []RegisterClient //pattern clients
+	clients           []RegisterClient
 	delayedTimeEvents []*DelayedTimeEvent
-	beego.Controller
 }
 
 func NewRegisterMgr() *RegisterMgr {
@@ -46,9 +46,19 @@ func (rgm *RegisterMgr) delay(te *TimeEvent, cli RegisterClient) {
 	})
 }
 
+func (rgm *RegisterMgr) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		rgm.Post(w, r)
+		return
+	default:
+		w.Write([]byte(REP_ROUTER_NOT_FOUND))
+	}
+}
+
 //add http client
 //err if name exists
-func (rgm *RegisterMgr) Post() {
+func (rgm *RegisterMgr) Post(w http.ResponseWriter, r *http.Request) {
 	//key name url isPattern
 	var reqObj struct {
 		Name      string `json:"name"`
@@ -56,23 +66,28 @@ func (rgm *RegisterMgr) Post() {
 		Key       string `json:"key"`
 		isPattern bool   `json:"isPattern"`
 	}
-	err := json.Unmarshal(rgm.Ctx.Input.RequestBody, &reqObj)
+	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		rgm.Ctx.WriteString("err parse json:" + err.Error())
+		w.Write([]byte(REP_BAD_REQ))
+		return
+	}
+	err = json.Unmarshal(buf, &reqObj)
+	if err != nil {
+		w.Write([]byte("err parse json:" + err.Error()))
 		return
 	}
 	__deRegCli__("serve http for register mgr:%v", reqObj)
 	if reqObj.Key == "" {
-		rgm.Ctx.WriteString("no key")
+		w.Write([]byte(("no key")))
 		return
 	}
 	if reqObj.Name == "" {
-		rgm.Ctx.WriteString("no name")
+		w.Write([]byte("no name"))
 		return
 	}
 	//TODO regexp url
 	if reqObj.Key == "" {
-		rgm.Ctx.WriteString("no url or illegal")
+		w.Write([]byte("no url or illegal"))
 		return
 	}
 	var m RegisterClientMatcher
@@ -82,7 +97,7 @@ func (rgm *RegisterMgr) Post() {
 		var errCpl error
 		m, errCpl = NewRegexpKeyMatcher(reqObj.Key)
 		if errCpl != nil {
-			rgm.Ctx.WriteString(fmt.Sprintf("compile regexp:%s, fail, err:%s", reqObj.Key, errCpl))
+			w.Write([]byte(fmt.Sprintf("compile regexp:%s, fail, err:%s", reqObj.Key, errCpl)))
 			return
 		}
 	}
@@ -90,6 +105,7 @@ func (rgm *RegisterMgr) Post() {
 	rgm.clients = append(rgm.clients, c)
 	__deRegMgr__("add http client, key:%s, name:%s, url:%s",
 		reqObj.Key, reqObj.Name, reqObj.Url)
+	w.Write([]byte(REP_OK))
 }
 
 type DelayedTimeEvent struct {

@@ -1,34 +1,35 @@
 package main
 
 import (
-	"github.com/astaxie/beego"
+	"net/http"
+
 	. "github.com/tj/go-debug"
 )
 
-var deMain = Debug("timer:main")
+var __deMain__ = Debug("timer:main")
 
 func main() {
 	chTimeEventOut := make(chan *TimeEvent)
-	chTimeEventCmd := make(chan *TimeEventCmd)
+	chTimeEventCmd := make(chan *TimeEventCmd, 10)
 	trigger := NewTimeEventTrigger(chTimeEventOut, chTimeEventCmd)
 	go trigger.Begin()
 	debugTecm := NewDebugTECM()
 	regMgrTecm := NewRegisterMgr()
 	go broadcastEvent(chTimeEventOut, debugTecm, regMgrTecm)
 	//http register client
-	beego.Router("/client", NewRegisterMgr())
-	beego.Router("/time_event", trigger)
-	beego.Run()
+	http.Handle("/time_event", trigger)
+	http.Handle("/handler/http", regMgrTecm)
+	http.ListenAndServe(":6200", nil)
 }
 
 func broadcastEvent(chTE <-chan *TimeEvent, heads ...TimeEventHandler) {
 	for {
-		deMain("wait for te")
+		__deMain__("wait for te")
 		te := <-chTE
 		for _, head := range heads {
 			err := head.HandleTimeEvent(te)
 			if err != nil {
-				deMain("handle error:%s, quit", err)
+				__deMain__("handle error:%s, quit", err)
 				break
 			}
 		}

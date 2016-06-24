@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
-	"github.com/astaxie/beego"
 	"github.com/tj/go-debug"
 )
 
@@ -22,7 +19,6 @@ type TimeEventTrigger struct {
 	tes     []*TimeEvent
 	timer   *time.Timer
 	nearest *TimeEvent
-	beego.Controller
 }
 
 //NewTimeEventTrigger create TimeEventTrigger
@@ -47,6 +43,7 @@ func (tet *TimeEventTrigger) Begin() {
 	for {
 		select {
 		case cmd := <-tet.chTimeEventCmd:
+			__deTrigger__("read time event cmd:%v", cmd)
 			tet.handleCmd(cmd)
 		case <-tet.timer.C:
 			tet.triggerEvent()
@@ -121,56 +118,3 @@ func (tet *TimeEventTrigger) findNearestEvent() *TimeEvent {
 	}
 	return near
 }
-
-const pathPrefix = "time_event"
-const KEY_NAME = "key"
-const DATA_NAME = "data"
-const DELAY_NAME = "delay"
-
-var (
-	pathAdd = fmt.Sprintf("/%s/%s", pathPrefix, "add")
-)
-
-//ADD MOD DEL from http
-func (tet *TimeEventTrigger) Post() {
-	var reqObj struct {
-		key   string `json:"key"`
-		data  []byte `json:"data"`
-		delay int64  `json:"delay"`
-	}
-	err := json.Unmarshal(tet.Ctx.Input.RequestBody, &reqObj)
-	__deTrigger__("got json req obj :%v", reqObj)
-	if err != nil {
-		tet.Ctx.WriteString(fmt.Sprintf("wrong body parse json:%s", err))
-		return
-	}
-
-	if reqObj.key == "" {
-		tet.Ctx.WriteString(REP_NO_KEY)
-		return
-	}
-	//delay is seconds
-	if reqObj.delay < 0 {
-		tet.Ctx.WriteString(REP_DELAY_WRONG)
-		return
-	}
-	err = tet.addTimeEvent(&TimeEvent{
-		key:   reqObj.key,
-		data:  reqObj.data,
-		delay: time.Second * time.Duration(reqObj.delay),
-	})
-	if err != nil {
-		tet.Ctx.WriteString(fmt.Sprintf("err when add to time events:%s", err))
-		return
-	}
-	tet.Ctx.WriteString(REP_OK)
-	return
-}
-
-var (
-	REP_ROUTER_NOT_FOUND = "404 router not found\n"
-	REP_OK               = "OK\n"
-	REP_DELAY_WRONG      = "param delay must be posive(in seconds)\n"
-	REP_NO_KEY           = "no key\n"
-	REP_BAD_REQ          = "request body or query error\n"
-)
