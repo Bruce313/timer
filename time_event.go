@@ -5,6 +5,31 @@ import (
 	"time"
 )
 
+type TimeEventGenerator interface {
+	getNext() time.Duration
+	peerNext() time.Duration //-1 adicate no more
+}
+
+type timerTimeEventGenerator struct {
+	isGened bool
+	delay   time.Duration
+}
+
+func (tteg *timerTimeEventGenerator) getNext() time.Duration {
+	if tteg.isGened {
+		return -1
+	}
+	tteg.isGened = true
+	return tteg.delay
+}
+
+func (tteg *timerTimeEventGenerator) peerNext() time.Duration {
+	if tteg.isGened {
+		return -1
+	}
+	return tteg.delay
+}
+
 //TimeEvent contain key and data of time
 type TimeEvent struct {
 	key           string        `json:"key"`
