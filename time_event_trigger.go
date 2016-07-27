@@ -16,7 +16,7 @@ type TimeEventTrigger struct {
 	chTimeEventOut chan<- *TimeEvent
 	chTimeEventCmd <-chan *TimeEventCmd
 	//TODO heap it
-	tes     []*TimeEvent
+	tes     []TimeEventGenerator
 	timer   *time.Timer
 	nearest *TimeEvent
 }
@@ -67,6 +67,7 @@ func (tet *TimeEventTrigger) triggerEvent() {
 		__deTrigger__("[WARN]: trigger event but nearest is nil")
 		return
 	}
+	tet.nearest.timeTriggered = time.Now()
 	tet.chTimeEventOut <- tet.nearest
 	//del nearest te
 	for i, v := range tet.tes {
