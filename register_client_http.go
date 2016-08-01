@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
 	"strings"
 )
@@ -40,12 +39,13 @@ func (rch *RegisterClientHTTP) Deliver(te *TimeEvent) error {
 }
 
 func (rch *RegisterClientHTTP) buildBody(te *TimeEvent) []byte {
-	return []byte(fmt.Sprintf(`
-		{
-			"key": "%s",
-			"data": "%s",
-			"delay": %d,
-			"name": "%s"
-		}
-	`, te.key, te.data, te.delay, rch.name))
+	return []byte(`OK`)
+	//return []byte(fmt.Sprintf(`
+	//	{
+	//		"key": "%s",
+	//		"data": "%s",
+	//		"delay": %d,
+	//		"name": "%s"
+	//	}
+	//`, te.key, te.data, te.delay, rch.name))
 }

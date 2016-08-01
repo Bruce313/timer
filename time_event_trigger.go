@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/astaxie/beego"
 	"github.com/tj/go-debug"
 )
 
@@ -18,7 +19,8 @@ type TimeEventTrigger struct {
 	//TODO heap it
 	tes     []TimeEventGenerator
 	timer   *time.Timer
-	nearest *TimeEvent
+	nearest TimeEventGenerator
+	beego.Controller
 }
 
 //NewTimeEventTrigger create TimeEventTrigger
@@ -29,7 +31,7 @@ func NewTimeEventTrigger(ch chan<- *TimeEvent, chType <-chan *TimeEventCmd) *Tim
 		chTimeEventOut: ch,
 		chTimeEventCmd: chType,
 		timer:          timer,
-		tes:            make([]*TimeEvent, 0),
+		tes:            make([]TimeEventGenerator, 0),
 	}
 }
 
@@ -53,13 +55,13 @@ func (tet *TimeEventTrigger) Begin() {
 }
 
 func (tet *TimeEventTrigger) refresh() {
-	te := tet.findNearestEvent()
-	if te == nil {
+	teg := tet.findNearestEventGenerator()
+	if teg == nil {
 		tet.timer.Stop()
 		return
 	}
-	tet.nearest = te
-	tet.timer.Reset(te.delay)
+	tet.nearest = teg
+	tet.timer.Reset(teg.getNext())
 }
 
 func (tet *TimeEventTrigger) triggerEvent() {
@@ -67,8 +69,11 @@ func (tet *TimeEventTrigger) triggerEvent() {
 		__deTrigger__("[WARN]: trigger event but nearest is nil")
 		return
 	}
-	tet.nearest.timeTriggered = time.Now()
-	tet.chTimeEventOut <- tet.nearest
+	te := tet.nearest.genTimeEvent()
+	now := time.Now()
+	te.timeTriggered = &now
+	//TODO: deal with blocking
+	tet.chTimeEventOut <- te
 	//del nearest te
 	for i, v := range tet.tes {
 		if v.Equals(tet.nearest) {
@@ -81,39 +86,32 @@ func (tet *TimeEventTrigger) triggerEvent() {
 func (tet *TimeEventTrigger) handleCmd(cmd *TimeEventCmd) {
 	switch cmd.tt {
 	case TimeEventCmdTypeAdd:
-		tet.addTimeEvent(cmd.te)
+		tet.AddTimeEventGenerator(cmd.teg)
 	}
 	tet.refresh()
 }
 
 var ErrKeyDup = errors.New("time event key duplicate")
 
-func (tet *TimeEventTrigger) addTimeEvent(te *TimeEvent) error {
-	if tet.findTimeEvent(te.key) != nil {
-		return ErrKeyDup
+func (tet *TimeEventTrigger) AddTimeEventGenerator(teg TimeEventGenerator) error {
+	for _, v := range tet.tes {
+		if v.Equals(teg) {
+			return ErrKeyDup
+		}
 	}
-	tet.tes = append(tet.tes, te)
+	tet.tes = append(tet.tes, teg)
 	tet.refresh()
 	return nil
 }
 
-func (tet *TimeEventTrigger) findTimeEvent(key string) *TimeEvent {
-	for _, v := range tet.tes {
-		if v.key == key {
-			return v
-		}
-	}
-	return nil
-}
-
-func (tet *TimeEventTrigger) findNearestEvent() *TimeEvent {
-	var near *TimeEvent
+func (tet *TimeEventTrigger) findNearestEventGenerator() TimeEventGenerator {
+	var near TimeEventGenerator
 	for _, te := range tet.tes {
 		if near == nil {
 			near = te
 			continue
 		}
-		if near.delay > te.delay {
+		if near.getNext() > te.getNext() {
 			near = te
 		}
 	}

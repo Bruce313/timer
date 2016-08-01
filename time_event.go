@@ -7,8 +7,14 @@ import (
 	"github.com/robfig/cron"
 )
 
+type TimeEventMetor interface {
+	GetKey() string
+	Equals(TimeEventMetor) bool
+}
+
 type TimeEventGenerator interface {
-	getNext() *time.Duration
+	TimeEventMetor
+	getNext() time.Duration
 	genTimeEvent() *TimeEvent
 }
 
@@ -18,7 +24,7 @@ type timerTimeEventGenerator struct {
 	isTriggerd   bool
 }
 
-func newTimerTimeEventGeneratro(delay time.Duration, m *TimeEventMeta) *timerTimeEventGenerator {
+func newTimerTimeEventGenerator(delay time.Duration, m *TimeEventMeta) *timerTimeEventGenerator {
 	now := time.Now()
 	return &timerTimeEventGenerator{
 		meta:         m,
@@ -46,7 +52,7 @@ func (tteg *timerTimeEventGenerator) genTimeEvent() *TimeEvent {
 type intervalTimeEventGenerator struct {
 	schedule   cron.Schedule
 	lastTigger *time.Time
-	meta       *TimeEventMeta
+	*TimeEventMeta
 }
 
 func newIntervalTimeEventGenerator(spec string, m *TimeEventMeta) (*intervalTimeEventGenerator, error) {
@@ -56,9 +62,9 @@ func newIntervalTimeEventGenerator(spec string, m *TimeEventMeta) (*intervalTime
 	}
 	now := time.Now()
 	return &intervalTimeEventGenerator{
-		schedule:   schedule,
-		lastTigger: &now,
-		meta:       m,
+		schedule:      schedule,
+		lastTigger:    &now,
+		TimeEventMeta: m,
 	}, nil
 }
 
@@ -70,7 +76,7 @@ func (iteg *intervalTimeEventGenerator) genTimeEvent() *TimeEvent {
 	now := time.Now()
 	iteg.lastTigger = &now
 	return &TimeEvent{
-		TimeEventMeta: iteg.meta,
+		TimeEventMeta: iteg.TimeEventMeta,
 		timeTriggered: &now,
 	}
 }
@@ -79,6 +85,23 @@ type TimeEventMeta struct {
 	key          string
 	data         []byte
 	timeRegister *time.Time
+}
+
+func (tem *TimeEventMeta) GetKey() string {
+	return tem.key
+}
+
+func (tem *TimeEventMeta) Equals(other TimeEventMetor) bool {
+	return tem.GetKey() == other.GetKey()
+}
+
+func NewTimeEventMeta(pkey string, pdata []byte) *TimeEventMeta {
+	now := time.Now()
+	return &TimeEventMeta{
+		key:          pkey,
+		data:         pdata,
+		timeRegister: &now,
+	}
 }
 
 //TimeEvent contain key and data of time
@@ -111,6 +134,6 @@ const (
 
 //TimeEventCmd contain operation and config of timeevent
 type TimeEventCmd struct {
-	tt TimeEventCmdType
-	te *TimeEvent
+	tt  TimeEventCmdType
+	teg TimeEventGenerator
 }

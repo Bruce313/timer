@@ -2,23 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/astaxie/beego"
 	"io/ioutil"
 	"net/http"
 	"time"
 )
 
-func (tet *TimeEventTrigger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		tet.servePost(w, r)
-		return
-	default:
-		w.Write([]byte(REP_ROUTER_NOT_FOUND))
-		return
-	}
-}
-
-func (tet *TimeEventTrigger) servePost(w http.ResponseWriter, r *http.Request) {
+func (tet *TimeEventTrigger) Post() {
 	var reqObj struct {
 		Key   string `json:"key"`
 		Data  string `json:"data"`
@@ -38,7 +28,7 @@ func (tet *TimeEventTrigger) servePost(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(REP_NO_KEY))
 		return
 	}
-	err = tet.addTimeEvent(&TimeEvent{
+	err = tet.AddTimeEvent(&TimeEvent{
 		key:   reqObj.Key,
 		data:  []byte(reqObj.Data),
 		delay: time.Second * time.Duration(reqObj.Delay),

@@ -108,6 +108,10 @@ func (rgm *RegisterMgr) Post(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(REP_OK))
 }
 
+func (rgm *RegisterMgr) AddClients(c RegisterClient) {
+	rgm.clients = append(rgm.clients, c)
+}
+
 type DelayedTimeEvent struct {
 	client RegisterClient
 	te     *TimeEvent
